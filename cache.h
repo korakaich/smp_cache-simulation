@@ -29,6 +29,7 @@ protected:
     ulong seq;
 
 public:
+
     cacheLine() {
         tag = 0;
         Flags = 0;
@@ -83,7 +84,7 @@ public:
         return ((Flags) == DIRTY);
     }
 
-    bool isInvalid() {
+    bool isShared() {
         return ((Flags) == VALID);
     }
 
@@ -96,6 +97,9 @@ class Cache {
 protected:
     ulong size, lineSize, assoc, sets, log2Sets, log2Blk, tagMask, numLines;
     ulong reads, readMisses, writes, writeMisses, writeBacks;
+    ulong invalidToShared, invalidToModified, sharedToModified, modifiedToShared, flushes;
+    ulong sharedToInvalid, modifiedToInvalid;
+    int id;
     Bus *bus;
 
     //******///
@@ -151,17 +155,25 @@ public:
     ulong getWB() {
         return writeBacks;
     }
+    
+    int getId() {
+        return id;
+    }
 
     void writeBack(ulong) {
         writeBacks++;
     }
     void Access(ulong, uchar);
+    void AccessMSI(ulong, uchar);
     void printStats();
     void updateLRU(cacheLine *);
 
     //******///
     //add other functions to handle bus transactions///
     //******///
+    
+    void processMSIBusRd(ulong);
+    void processMSIBusRdx(ulong);
 
 };
 

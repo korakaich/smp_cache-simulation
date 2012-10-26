@@ -14,11 +14,15 @@ Cache::setBus(Bus *bus) {
     this->bus = bus;
 }
 
-Cache::Cache(int s, int a, int b) {
+Cache::Cache(int s, int a, int b, int id) {
     ulong i, j;
     reads = readMisses = writes = 0;
     writeMisses = writeBacks = currentCycle = 0;
+    this->id = id;
 
+    invalidToShared = invalidToModified = sharedToModified = modifiedToShared = flushes = 0;
+    sharedToInvalid = modifiedToInvalid = 0;
+    
     size = (ulong) (s);
     lineSize = (ulong) (b);
     assoc = (ulong) (a);
@@ -70,6 +74,79 @@ void Cache::Access(ulong addr, uchar op) {
         /**since it's a hit, update LRU and update dirty flag**/
         updateLRU(line);
         if (op == 'w') line->setFlags(DIRTY);
+    }
+}
+
+void Cache::AccessMSI(ulong addr, uchar op) {
+    currentCycle++; /*per cache global counter to maintain LRU order 
+			among cache ways, updated on every cache access*/
+
+    if (op == 'w') writes++;
+    else reads++;
+
+    cacheLine * line = findLine(addr);
+    if (line == NULL)/*miss*/ {
+        if (op == 'w') writeMisses++;
+        else readMisses++;
+
+        cacheLine *newline = fillLine(addr);
+        //reading send a busRd
+        bus->busRd(id, addr);
+
+        if (op == 'w') {
+            newline->setFlags(DIRTY);
+            //send a busrdx
+            bus->busRdx(id, addr);
+        }
+    } else {
+        /**since it's a hit, update LRU and update dirty flag**/
+        if (line->isModified()) { //1.check if the cache is Modified, then do nothing
+            updateLRU(line);
+        } else if (line->isInvalid()) { //2. get from memory and change state
+            //line is present just update
+            updateLRU(line);
+            if (op == 'r') {
+                bus->busRd(id, addr);
+                invalidToShared++;
+                line->makeShared();
+            } else {
+                invalidToModified++;
+                bus->busRdx(id, addr);
+                line->makeModified();
+            }
+        } else { //3. State is shared
+            updateLRU(line);
+            if (op == 'w') {
+                sharedToModified++;
+                bus->busRdx(id, addr);
+                line->makeModified();
+            }
+        }
+    }
+}
+
+void Cache::processMSIBusRd(ulong addr){
+    cacheLine * line = findLine(addr);
+    if (line != NULL){
+        if(line->isModified()){
+            modifiedToShared++;
+            line->makeShared();
+            flushes++;
+        }
+    }
+}
+
+void Cache::processMSIBusRdx(ulong addr){
+    cacheLine * line = findLine(addr);
+    if(line != NULL){
+        if(line->isShared()){
+            sharedToInvalid++;
+            line->makeInvalid();
+        } else if (line->isModified()) {
+            modifiedToInvalid++;
+            flushes++;
+            line->makeInvalid();
+        }
     }
 }
 

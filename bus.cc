@@ -19,15 +19,21 @@ public:
     }
     
     void busRd(int id, ulong address){
-        
+        int i;
+        for(i=0; i<num; i++)
+            if(caches[i].getId() != id)
+                caches[i].processMSIBusRd(address);
     }
     
     void busRdx(int id, ulong address){
-        
+        int i;
+        for(i=0; i<num; i++)
+            if(caches[i].getId() != id)
+                caches[i].processMSIBusRdx(address);
     }
     
     void flush(int id, ulong address){
-        
+        //DoNothing
     }
 
 private:
