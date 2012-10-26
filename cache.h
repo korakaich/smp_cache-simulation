@@ -43,8 +43,9 @@ public:
 
 class Cache
 {
+	
 protected:
-   ulong size, lineSize, assoc, sets, log2Sets, log2Blk, tagMask, numLines;
+   ulong  size,lineSize, assoc, sets, log2Sets, log2Blk, tagMask, numLines;
    ulong reads,readMisses,writes,writeMisses,writeBacks;
 
    //******///
@@ -58,7 +59,6 @@ protected:
    
 public:
     ulong currentCycle;  
-     
     Cache(int,int,int);
    ~Cache() { delete cache;}
    

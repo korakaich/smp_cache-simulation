@@ -9,7 +9,7 @@
 #include <assert.h>
 #include <fstream>
 using namespace std;
-
+#include "bus.h"
 #include "cache.h"
 
 int main(int argc, char *argv[])
@@ -28,15 +28,23 @@ int main(int argc, char *argv[])
 	//int cache_size = atoi(argv[1]);
 	//int cache_assoc= atoi(argv[2]);
 	//int blk_size   = atoi(argv[3]);
-	//int num_processors = atoi(argv[4]);/*1, 2, 4, 8*/
+	int num_processors;// = atoi(argv[4]);/*1, 2, 4, 8*/
 	//int protocol   = atoi(argv[5]);	 /*0:MSI, 1:MESI, 2:MOESI*/
+
+	//remove
+	num_processors=4;
 	char *fname =  (char *)malloc(20);
  	fname = argv[1];
+	Bus bus;	
 	Cache *cacheArray[4];
 	for(int i =0;i<4;i++)
 	{
 		cacheArray[i]=new Cache(512 , 4, 2);
 	}
+	
+	//register caches in bus.
+	bus.setCaches(cacheArray,num_processors);
+
 	//****************************************************//
 	//**printf("===== Simulator configuration =====\n");**//
 	//*******print out simulator configuration here*******//

@@ -27,7 +27,6 @@ Cache::Cache(int s,int a,int b )
    //*******************//
    //initialize your counters here//
    //*******************//
- 
    tagMask =0;
    for(i=0;i<log2Sets;i++)
    {
