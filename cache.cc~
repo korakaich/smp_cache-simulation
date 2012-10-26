@@ -116,14 +116,14 @@ void Cache::AccessMSI(ulong addr, uchar op, Bus bus) {
                 line->makeShared();
             } else {
                 invalidToModified++;
-                bus.busRdX(id, addr);
+                bus.busRdx(id, addr);
                 line->makeModified();
             }
         } else { //3. State is shared
             //updateLRU(line);
             if (op == 'w') {
                 sharedToModified++;
-                bus.busRdX(id, addr);
+                bus.busRdx(id, addr);
                 line->makeModified();
             }
         }

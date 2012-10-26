@@ -85,7 +85,7 @@ public:
    ulong getWrites(){return writes;}
    ulong getWB(){return writeBacks;}
    uint getId(){return id;}
-   void setId(uint id){this->id=id;}
+   void setId(uint id){this.id=id;}
    
    void writeBack(ulong)   {writeBacks++;}
    void Access(ulong,uchar);
