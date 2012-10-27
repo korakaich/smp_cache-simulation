@@ -48,6 +48,7 @@ public:
    void makeShared() 	  { Flags = VALID; }
    bool isModified() 	  { return ((Flags) == DIRTY); }
    bool isShared() 	  { return ((Flags) == VALID); }
+   bool isInvalid()	  { return ((Flags) == INVALID); }
 };
 
 class Cache
@@ -59,8 +60,9 @@ protected:
    
    //******///
    //add coherence counters here///
-   ulong invalidToShared, invalidToModified, sharedToModified, modifiedToShared, flushes;
-   ulong sharedToInvalid, modifiedToInvalid;
+   ulong invalidToShared, invalidToModified, sharedToModified, modifiedToShared, exclusiveToModified, flushes, invalidations;
+   //ulong invalidToExclusive;
+   ulong sharedToInvalid, modifiedToInvalid, exclusiveToShared, ownedToModified, modifiedToOwned, cacheToCache, interventions;
    //******///
 
    cacheLine **cache;

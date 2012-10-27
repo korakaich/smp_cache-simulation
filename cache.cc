@@ -15,9 +15,7 @@ Cache::Cache(int s,int a,int b )
 {
    ulong i, j;
    reads = readMisses = writes = 0; 
-   writeMisses = writeBacks = currentCycle = 0;
-   invalidToShared = invalidToModified = sharedToModified = modifiedToShared = flushes = 0;
-   sharedToInvalid = modifiedToInvalid = 0;
+   
    size       = (ulong)(s);
    lineSize   = (ulong)(b);
    assoc      = (ulong)(a);   
@@ -28,11 +26,15 @@ Cache::Cache(int s,int a,int b )
   
    //*******************//
    //initialize your counters here//
+   writeMisses = writeBacks = currentCycle = 0;
+   invalidToShared = invalidToModified = sharedToModified = modifiedToShared = flushes = interventions = invalidations =0;
+   sharedToInvalid = modifiedToInvalid = modifiedToOwned= ownedToModified= exclusiveToModified= exclusiveToShared=0;
+   //invalidToExclusive=0;
    //*******************//
    tagMask =0;
    for(i=0;i<log2Sets;i++)
    {
-		tagMask <<= 1;
+	tagMask <<= 1;
         tagMask |= 1;
    }
    
@@ -91,25 +93,27 @@ void Cache::AccessMSI(ulong addr, uchar op, Bus bus) {
 
         cacheLine *newline = fillLine(addr);
         //reading send a busRd
-		if(op =='r')
-		{
+	if(op =='r')
+	{
         	bus.busRd(id, addr);
-			newline->setFlags(VALID);
-			//? invalidToShared++;
-		}
+		newline->setFlags(VALID);
+		invalidToShared++;
+	}
         if (op == 'w') {
             newline->setFlags(DIRTY);
             //send a busrdx
             bus.busRdX(id, addr);
-			//?invalidToModified++;
+	    invalidToModified++;
         }
-    } else {
+    } 
+    else 
+    {
         /**since it's a hit, update LRU and update dirty flag**/
-	  updateLRU(line);                  
-	  //if modified do nothing
-      if (!line->isValid()) { //2. get from memory and change state
+	updateLRU(line);                  
+	//1.if modified do nothing
+	if(line->isModified()){}
+        else if (line->isInvalid()) { //2. shared--get from memory and change state
             //line is present just update
-            //updateLRU(line);
             if (op == 'r') {
                 invalidToShared++;
                 bus.busRd(id, addr);
@@ -146,8 +150,10 @@ void Cache::processMSIBusRdX(ulong addr){
         if(line->isShared()){
             line->makeInvalid();
             sharedToInvalid++;	
+	    invalidations++;
         } else if (line->isModified()) {
             modifiedToInvalid++;
+	    invalidations++;
             line->makeInvalid();
             flushes++;
         }
@@ -242,4 +248,17 @@ void Cache::printStats()
 	printf("03. number of writes:				%ld\n", writes);
 	printf("04. number of write misses:			%ld\n", writeMisses);
 	printf("05. number of write backs:			%ld\n", writeBacks);
+	//printf("06. number of invalid to exclusive (INV->EXC):	%ld\n", invalidToExclusive);
+	printf("07. number of invalid to shared (INV->SHD):	%ld\n", invalidToShared);
+	printf("08. number of modified to shared (MOD->SHD):	%ld\n", modifiedToShared);
+	printf("09. number of exclusive to shared (EXC->SHD):	%ld\n", exclusiveToShared);
+	printf("10. number of shared to modified (SHD->MOD):	%ld\n", sharedToModified);
+	printf("11. number of invalid to modified (INV->MOD):	%ld\n", invalidToModified);
+	printf("12. number of exclusive to modified (EXC->MOD):	%ld\n", exclusiveToModified);
+	printf("13. number of owned to modified (OWN->MOD):	%ld\n", ownedToModified);
+	printf("14. number of modified to owned (MOD->OWN):	%ld\n", modifiedToOwned);
+	printf("15. number of cache to cache transfers:		%ld\n", cacheToCache);
+	printf("16. number of interventions:			%ld\n", interventions);
+	printf("17. number of invalidations:			%ld\n", invalidations);
+	printf("18. number of flushes:				%ld\n", flushes);
 }

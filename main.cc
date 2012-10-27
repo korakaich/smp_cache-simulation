@@ -38,7 +38,7 @@ int main(int argc, char *argv[])
 	Cache *cacheArray[4];
 	for(int i =0;i<4;i++)
 	{
-		cacheArray[i]=new Cache(512 , 4, 2);
+		cacheArray[i]=new Cache(8192 , 8, 64);
 		cacheArray[i]->setId(i);
 	}
 	
