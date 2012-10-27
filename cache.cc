@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include "cache.h"
-#include "bus.h"
+
 using namespace std;
 
 Cache::Cache(int s,int a,int b )
@@ -133,8 +133,160 @@ void Cache::AccessMSI(ulong addr, uchar op, Bus bus) {
         }
     }
 }
+void Cache::AccessMESI(ulong addr, uchar op, Bus bus)
+{
+	currentCycle++; /*per cache global counter to maintain LRU order 
+			among cache ways, updated on every cache access*/
+    if (op == 'w') writes++;
+    else reads++;
 
-void Cache::processMSIBusRd(ulong addr){
+    cacheLine * line = findLine(addr);
+    if (line == NULL)/*miss*/ 
+	{
+        if (op == 'w') writeMisses++;
+        else readMisses++;
+        cacheLine *newline = fillLine(addr);
+        //reading send a busRd
+		if(op =='r')	
+		{
+			//if no other cache has the line, then change to E
+			if(!bus.isCached(id, addr))
+			{
+				bus.busRd(id,addr);
+				newline->setFlags(EXCLUSIVE);				
+				invalidToExclusive++;
+			}
+			else
+			{
+        		bus.busRd(id, addr);
+				newline->setFlags(VALID);
+				invalidToShared++;
+			}
+		}
+        if (op == 'w') 
+		{
+            newline->setFlags(DIRTY);            
+            bus.busRdX(id, addr);//send a busrdx
+	    	invalidToModified++;
+        }
+    } 
+    else 
+    {
+        /**since it's a hit, update LRU and update dirty flag**/
+		updateLRU(line);                  
+		//1.if modified do nothing
+		if(line->isModified())
+		{
+		}
+        else if (line->isInvalid()) 
+		{ //2. invalid--get from memory and change state
+            //line is present just update
+            if(op =='r')	
+			{
+			//if line in no other cache has the line, then change to E
+				if(!bus.isCached(id, addr))
+				{
+					bus.busRd(id,addr);
+					line->setFlags(EXCLUSIVE);				
+					invalidToExclusive++;
+				}
+				else
+				{
+        			bus.busRd(id, addr);
+					line->setFlags(VALID);
+					invalidToShared++;
+				}
+			}
+			else if (op == 'w') 	
+			{
+           		 line->setFlags(DIRTY);            
+           		 bus.busRdX(id, addr);//send a busrdx
+	    		 invalidToModified++;
+        	}
+        } 
+		else if (line->isShared())
+		{ //3. State is shared
+            if (op == 'w') 
+			{
+                sharedToModified++;
+                bus.busUpgr(id, addr);
+                line->makeModified();
+            }
+        }
+		else if (line->isExclusive())
+		{
+            if (op == 'w') {
+                exclusiveToModified++;
+                line->makeModified();
+            }
+			
+		}
+    }
+}
+
+void Cache::processMESIBusRd(ulong addr){
+    cacheLine * line = findLine(addr);
+    if (line != NULL){		
+        if(line->isModified()){
+            modifiedToShared++;
+            line->makeShared();
+            flushes++;
+        }
+		else if(line->isExclusive())
+		{
+            exclusiveToShared++;
+            line->makeShared();
+            cacheToCache++;			
+		}
+		else if(line->isShared())
+		{
+			//cacheToCache++;
+		}
+    }
+}
+
+void Cache::processMESIBusRdX(ulong addr){
+    cacheLine * line = findLine(addr);
+    if(line != NULL){
+        if(line->isShared()){
+            line->makeInvalid();
+            sharedToInvalid++;	
+	    	invalidations++;
+			cacheToCache++;
+        } 
+		else if (line->isModified()) 
+		{
+            modifiedToInvalid++;
+		    invalidations++;
+            line->makeInvalid();
+            flushes++;
+        }
+		else if (line->isExclusive()) 
+		{
+            //exclusiveToInvalid++;
+		    invalidations++;
+            line->makeInvalid();
+            flushes++;
+        }
+    }
+}
+
+void Cache::processMESIBusUpgr(ulong addr)
+{
+    cacheLine * line = findLine(addr);
+    if(line != NULL)
+	{
+		if(line->isShared())
+		{
+			line->makeInvalid();
+			invalidations++;
+		}	
+	}
+}
+
+
+void Cache::processMSIBusRd(ulong addr)
+{
     cacheLine * line = findLine(addr);
     if (line != NULL){
         if(line->isModified()){
@@ -239,26 +391,26 @@ cacheLine *Cache::fillLine(ulong addr)
 
 void Cache::printStats()
 { 
-	printf("===== Simulation results      =====\n");
+
 	/****print out the rest of statistics here.****/
 	/****follow the ouput file format**************/
-	printf("===== Simulation results (Cache_0)      =====\n");
+	printf("===== Simulation results (Cache_%d)      =====\n", id);
 	printf("01. number of reads:				%ld\n", reads);
 	printf("02. number of read misses:			%ld\n", readMisses);
 	printf("03. number of writes:				%ld\n", writes);
 	printf("04. number of write misses:			%ld\n", writeMisses);
 	printf("05. number of write backs:			%ld\n", writeBacks);
-	//printf("06. number of invalid to exclusive (INV->EXC):	%ld\n", invalidToExclusive);
-	printf("07. number of invalid to shared (INV->SHD):	%ld\n", invalidToShared);
-	printf("08. number of modified to shared (MOD->SHD):	%ld\n", modifiedToShared);
-	printf("09. number of exclusive to shared (EXC->SHD):	%ld\n", exclusiveToShared);
-	printf("10. number of shared to modified (SHD->MOD):	%ld\n", sharedToModified);
-	printf("11. number of invalid to modified (INV->MOD):	%ld\n", invalidToModified);
-	printf("12. number of exclusive to modified (EXC->MOD):	%ld\n", exclusiveToModified);
-	printf("13. number of owned to modified (OWN->MOD):	%ld\n", ownedToModified);
-	printf("14. number of modified to owned (MOD->OWN):	%ld\n", modifiedToOwned);
-	printf("15. number of cache to cache transfers:		%ld\n", cacheToCache);
-	printf("16. number of interventions:			%ld\n", interventions);
-	printf("17. number of invalidations:			%ld\n", invalidations);
-	printf("18. number of flushes:				%ld\n", flushes);
+	printf("06. number of invalid to exclusive (INV->EXC):	%d\n", invalidToExclusive);
+	printf("07. number of invalid to shared (INV->SHD):	%d\n", invalidToShared);
+	printf("08. number of modified to shared (MOD->SHD):	%d\n", modifiedToShared);
+	printf("09. number of exclusive to shared (EXC->SHD):	%d\n", exclusiveToShared);
+	printf("10. number of shared to modified (SHD->MOD):	%d\n", sharedToModified);
+	printf("11. number of invalid to modified (INV->MOD):	%d\n", invalidToModified);
+	printf("12. number of exclusive to modified (EXC->MOD):	%d\n", exclusiveToModified);
+	printf("13. number of owned to modified (OWN->MOD):	%d\n", ownedToModified);
+	printf("14. number of modified to owned (MOD->OWN):	%d\n", modifiedToOwned);
+	printf("15. number of cache to cache transfers:		%d\n", cacheToCache);
+	printf("16. number of interventions:			%d\n", interventions);
+	printf("17. number of invalidations:			%d\n", invalidations);
+	printf("18. number of flushes:				%d\n", flushes);
 }

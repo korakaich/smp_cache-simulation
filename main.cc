@@ -24,21 +24,20 @@ int main(int argc, char *argv[])
         }
 
 	/*****uncomment the next five lines*****/
-	//int cache_size = atoi(argv[1]);
-	//int cache_assoc= atoi(argv[2]);
-	//int blk_size   = atoi(argv[3]);
-	int num_processors;// = atoi(argv[4]);/*1, 2, 4, 8*/
-	//int protocol   = atoi(argv[5]);	 /*0:MSI, 1:MESI, 2:MOESI*/
+	int cache_size = atoi(argv[1]);
+	int cache_assoc= atoi(argv[2]);
+	int blk_size   = atoi(argv[3]);
+	int num_processors= atoi(argv[4]);/*1, 2, 4, 8*/
+	int protocol   = atoi(argv[5]);	 /*0:MSI, 1:MESI, 2:MOESI*/
 
-	//remove
-	num_processors=4;
+	
 	char *fname =  (char *)malloc(20);
- 	fname = argv[1];
-	Bus bus;	
+ 	fname = argv[6];
+	Bus bus(protocol);	
 	Cache *cacheArray[4];
 	for(int i =0;i<4;i++)
 	{
-		cacheArray[i]=new Cache(8192 , 8, 64);
+		cacheArray[i]=new Cache(cache_size, cache_assoc, blk_size);
 		cacheArray[i]->setId(i);
 	}
 	
@@ -93,14 +92,29 @@ int main(int argc, char *argv[])
                 tempAddr[j]='\0';
                 //?? convert tempAddr to ulong ??//
                 addr=strtoul ( tempAddr, NULL,16 );
-                cacheArray[procNum]->AccessMSI(addr, op, bus);
+		if(protocol==0)
+                	cacheArray[procNum]->AccessMSI(addr, op, bus);
+		else if(protocol==1)
+                	cacheArray[procNum]->AccessMESI(addr, op, bus);		
 		if(op=='r')
 			total_reads++;
 		else
 			total_writes++;
         }
-	cout<<"reads: "<<total_reads<<" writes: "<<total_writes;
-	cout<<endl;
+
+	cout<<"===== 506 SMP Simulator Configuration ====="<<endl;
+	cout<<"L1_SIZE:			"<<cache_size<<endl;
+	cout<<"L1_ASSOC:			"<<cache_assoc<<endl;
+	cout<<"L1_BLOCKSIZE:			"<<blk_size<<endl;
+	cout<<"NUMBER OF PROCESSORS:		"<<num_processors<<endl;
+	if(protocol==0)
+		cout<<"COHERENCE PROTOCOL:		MSI"<<endl;
+	else if(protocol==1)
+		cout<<"COHERENCE PROTOCOL:		MESI"<<endl;
+	else
+		cout<<"COHERENCE PROTOCOL:		MOESI"<<endl;
+	cout<<"TRACE FILE:			"<<fname<<endl;
+
 	for(i=0;i<4;i++)
 		cacheArray[i]->printStats();
 	///******************************************************************//

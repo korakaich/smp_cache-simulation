@@ -19,7 +19,8 @@ typedef unsigned int uint;
 enum{
 	INVALID = 0,
 	VALID,
-	DIRTY
+	DIRTY,
+	EXCLUSIVE
 };
 
 
@@ -46,9 +47,11 @@ public:
    void makeInvalid() 	  { Flags = INVALID;  }
    void makeModified()   { Flags = DIRTY; }
    void makeShared() 	  { Flags = VALID; }
+   void makeExclusive()   { Flags=EXCLUSIVE; }
    bool isModified() 	  { return ((Flags) == DIRTY); }
    bool isShared() 	  { return ((Flags) == VALID); }
    bool isInvalid()	  { return ((Flags) == INVALID); }
+   bool isExclusive()	  { return ((Flags) == EXCLUSIVE); }
 };
 
 class Cache
@@ -60,9 +63,9 @@ protected:
    
    //******///
    //add coherence counters here///
-   ulong invalidToShared, invalidToModified, sharedToModified, modifiedToShared, exclusiveToModified, flushes, invalidations;
-   //ulong invalidToExclusive;
-   ulong sharedToInvalid, modifiedToInvalid, exclusiveToShared, ownedToModified, modifiedToOwned, cacheToCache, interventions;
+   uint invalidToShared, invalidToModified, sharedToModified, modifiedToShared, exclusiveToModified, flushes, invalidations;
+   uint invalidToExclusive;
+   uint sharedToInvalid, modifiedToInvalid, exclusiveToShared, ownedToModified, modifiedToOwned, cacheToCache, interventions;
    //******///
 
    cacheLine **cache;
@@ -93,9 +96,15 @@ public:
    void Access(ulong,uchar);
    void printStats();
    void updateLRU(cacheLine *);
-   void AccessMSI(ulong, uchar, Bus);
+
+   void AccessMSI(ulong, uchar, Bus);   
    void processMSIBusRd(ulong);
    void processMSIBusRdX(ulong);
+
+   void AccessMESI(ulong, uchar, Bus);
+   void processMESIBusRd(ulong);
+   void processMESIBusRdX(ulong);
+   void processMESIBusUpgr(ulong);
    //******///
    //add other functions to handle bus transactions///
    //******///
@@ -106,10 +115,13 @@ class Bus {
 private:
     Cache **caches;
     int numOfCaches;
+    int protocol;
 public:
-    Bus();
+    Bus(int);
     ~Bus();
     
+    bool isCached(int, ulong);
+
     void setCaches(Cache**, int num);
     
     void busRd(int, ulong);
