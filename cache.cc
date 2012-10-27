@@ -8,11 +8,8 @@
 #include <stdlib.h>
 #include <assert.h>
 #include "cache.h"
-using namespace std;
 
-Cache::setBus(Bus *bus) {
-    this->bus = bus;
-}
+using namespace std;
 
 Cache::Cache(int s, int a, int b, int id) {
     ulong i, j;
@@ -21,8 +18,8 @@ Cache::Cache(int s, int a, int b, int id) {
     this->id = id;
 
     invalidToShared = invalidToModified = sharedToModified = modifiedToShared = flushes = 0;
-    sharedToInvalid = modifiedToInvalid = 0;
-    
+    sharedToInvalid = modifiedToInvalid = invalidations = 0;
+
     size = (ulong) (s);
     lineSize = (ulong) (b);
     assoc = (ulong) (a);
@@ -77,7 +74,7 @@ void Cache::Access(ulong addr, uchar op) {
     }
 }
 
-void Cache::AccessMSI(ulong addr, uchar op) {
+void Cache::AccessMSI(ulong addr, uchar op, Bus *bus) {
     currentCycle++; /*per cache global counter to maintain LRU order 
 			among cache ways, updated on every cache access*/
 
@@ -85,20 +82,27 @@ void Cache::AccessMSI(ulong addr, uchar op) {
     else reads++;
 
     cacheLine * line = findLine(addr);
+    
+    
     if (line == NULL)/*miss*/ {
         if (op == 'w') writeMisses++;
         else readMisses++;
 
         cacheLine *newline = fillLine(addr);
         //reading send a busRd
-        bus->busRd(id, addr);
-
+	if(op =='r')
+	{
+        	bus->busRd(id, addr);
+		newline->setFlags(VALID);
+		invalidToShared++;
+	}
         if (op == 'w') {
             newline->setFlags(DIRTY);
             //send a busrdx
             bus->busRdx(id, addr);
+	    invalidToModified++;
         }
-    } else {
+    }  else {
         /**since it's a hit, update LRU and update dirty flag**/
         if (line->isModified()) { //1.check if the cache is Modified, then do nothing
             updateLRU(line);
@@ -125,10 +129,10 @@ void Cache::AccessMSI(ulong addr, uchar op) {
     }
 }
 
-void Cache::processMSIBusRd(ulong addr){
+void Cache::processMSIBusRd(ulong addr) {
     cacheLine * line = findLine(addr);
-    if (line != NULL){
-        if(line->isModified()){
+    if (line != NULL) {
+        if (line->isModified()) {
             modifiedToShared++;
             line->makeShared();
             flushes++;
@@ -136,16 +140,18 @@ void Cache::processMSIBusRd(ulong addr){
     }
 }
 
-void Cache::processMSIBusRdx(ulong addr){
+void Cache::processMSIBusRdx(ulong addr) {
     cacheLine * line = findLine(addr);
-    if(line != NULL){
-        if(line->isShared()){
+    if (line != NULL) {
+        if (line->isShared()) {
             sharedToInvalid++;
+            invalidations++;
             line->makeInvalid();
         } else if (line->isModified()) {
             modifiedToInvalid++;
-            flushes++;
+            invalidations++;
             line->makeInvalid();
+            flushes++;
         }
     }
 }
@@ -223,7 +229,24 @@ cacheLine *Cache::fillLine(ulong addr) {
 }
 
 void Cache::printStats() {
-    printf("===== Simulation results      =====\n");
-    /****print out the rest of statistics here.****/
-    /****follow the ouput file format**************/
+    int temp = 0;
+    cout << "===== Simulation results (Cache_" << id << ")      =====\n";
+    cout << "01. number of reads:\t\t\t\t" << reads << "\n";
+    cout << "02. number of read misses:\t\t\t" << readMisses << "\n";
+    cout << "03. number of writes:\t\t\t\t" << writes << "\n";
+    cout << "04. number of write misses:\t\t\t" << writeMisses << "\n";
+    cout << "05. number of write backs:\t\t\t" << writeBacks << "\n";
+    cout << "06. number of invalid to exclusive (INV->EXC):\t" << temp << "\n";
+    cout << "07. number of invalid to shared (INV->SHD):\t" << invalidToShared << "\n";
+    cout << "08. number of modified to shared (MOD->SHD):\t" << modifiedToShared << "\n";
+    cout << "09. number of exclusive to shared (EXC->SHD):\t" << temp << "\n";
+    cout << "10. number of shared to modified (SHD->MOD):\t" << sharedToModified << "\n";
+    cout << "11. number of invalid to modified (INV->MOD):\t" << invalidToModified << "\n";
+    cout << "12. number of exclusive to modified (EXC->MOD):\t" << temp << "\n";
+    cout << "13. number of owned to modified (OWN->MOD):\t" << temp << "\n";
+    cout << "14. number of modified to owned (MOD->OWN):\t" << temp << "\n";
+    cout << "15. number of cache to cache transfers:\t\t" << temp << "\n";
+    cout << "16. number of interventions:\t\t\t" << temp << "\n";
+    cout << "17. number of invalidations:\t\t\t" << invalidations << "\n";
+    cout << "18. number of flushes:\t\t\t\t" << flushes << "\n";
 }

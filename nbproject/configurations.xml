@@ -4,6 +4,8 @@
     <df name="smp_cache-simulation" root=".">
       <df name="Validation_runs">
       </df>
+      <in>bus.cc</in>
+      <in>bus.h</in>
       <in>cache.cc</in>
       <in>cache.h</in>
       <in>main.cc</in>
@@ -33,7 +35,7 @@
           <buildCommandWorkingDir>.</buildCommandWorkingDir>
           <buildCommand>${MAKE} -f Makefile</buildCommand>
           <cleanCommand>${MAKE} -f Makefile clean</cleanCommand>
-          <executablePath></executablePath>
+          <executablePath>smp_cache.exe</executablePath>
           <ccTool>
             <incDir>
               <pElem></pElem>

@@ -22,6 +22,36 @@ enum {
     DIRTY, //Modified
 };
 
+class Cache;
+class Bus {
+    Cache **caches;
+    int num;
+public:
+    Bus(){
+        
+    }
+    
+    ~Bus();
+
+    void setCaches(Cache **caches) {
+        this->caches = caches;
+    }
+
+    void setNum(int num) {
+        this->num = num;
+    }
+
+    void busRd(int, unsigned long);
+    void busRdx(int, unsigned long);
+
+    void flush(int id, unsigned long address) {
+        //DoNothing
+    }
+
+private:
+
+};
+
 class cacheLine {
 protected:
     ulong tag;
@@ -98,9 +128,8 @@ protected:
     ulong size, lineSize, assoc, sets, log2Sets, log2Blk, tagMask, numLines;
     ulong reads, readMisses, writes, writeMisses, writeBacks;
     ulong invalidToShared, invalidToModified, sharedToModified, modifiedToShared, flushes;
-    ulong sharedToInvalid, modifiedToInvalid;
+    ulong sharedToInvalid, modifiedToInvalid, invalidations;
     int id;
-    Bus *bus;
 
     //******///
     //add coherence counters here///
@@ -123,9 +152,7 @@ protected:
 public:
     ulong currentCycle;
 
-    void setBus(Bus *bus);
-
-    Cache(int, int, int);
+    Cache(int, int, int, int);
 
     ~Cache() {
         delete cache;
@@ -133,8 +160,8 @@ public:
 
     cacheLine *findLineToReplace(ulong addr);
     cacheLine *fillLine(ulong addr);
-    cacheLine * findLine(ulong addr);
-    cacheLine * getLRU(ulong);
+    cacheLine *findLine(ulong addr);
+    cacheLine *getLRU(ulong);
 
     ulong getRM() {
         return readMisses;
@@ -164,7 +191,7 @@ public:
         writeBacks++;
     }
     void Access(ulong, uchar);
-    void AccessMSI(ulong, uchar);
+    void AccessMSI(ulong, uchar, Bus *bus);
     void printStats();
     void updateLRU(cacheLine *);
 
@@ -176,5 +203,4 @@ public:
     void processMSIBusRdx(ulong);
 
 };
-
 #endif
