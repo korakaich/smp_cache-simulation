@@ -4,21 +4,16 @@
                            2009
                 {aasamih,solihin}@ece.ncsu.edu
  ********************************************************/
-
+#include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
 #include "cache.h"
 
 using namespace std;
 
-Cache::Cache(int s, int a, int b, int id) {
+Cache::Cache(int s, int a, int b) {
     ulong i, j;
     reads = readMisses = writes = 0;
-    writeMisses = writeBacks = currentCycle = 0;
-    this->id = id;
-
-    invalidToShared = invalidToModified = sharedToModified = modifiedToShared = flushes = 0;
-    sharedToInvalid = modifiedToInvalid = invalidations = 0;
 
     size = (ulong) (s);
     lineSize = (ulong) (b);
@@ -30,8 +25,11 @@ Cache::Cache(int s, int a, int b, int id) {
 
     //*******************//
     //initialize your counters here//
+    writeMisses = writeBacks = currentCycle = 0;
+    invalidToShared = invalidToModified = sharedToModified = modifiedToShared = flushes = interventions = invalidations = 0;
+    sharedToInvalid = modifiedToInvalid = modifiedToOwned = ownedToModified = exclusiveToModified = exclusiveToShared = 0;
+    //invalidToExclusive=0;
     //*******************//
-
     tagMask = 0;
     for (i = 0; i < log2Sets; i++) {
         tagMask <<= 1;
@@ -74,57 +72,318 @@ void Cache::Access(ulong addr, uchar op) {
     }
 }
 
-void Cache::AccessMSI(ulong addr, uchar op, Bus *bus) {
+void Cache::AccessMSI(ulong addr, uchar op, Bus bus) {
     currentCycle++; /*per cache global counter to maintain LRU order 
 			among cache ways, updated on every cache access*/
-
     if (op == 'w') writes++;
     else reads++;
 
     cacheLine * line = findLine(addr);
-    
-    
     if (line == NULL)/*miss*/ {
         if (op == 'w') writeMisses++;
         else readMisses++;
 
         cacheLine *newline = fillLine(addr);
         //reading send a busRd
-	if(op =='r')
-	{
-        	bus->busRd(id, addr);
-		newline->setFlags(VALID);
-		invalidToShared++;
-	}
+        if (op == 'r') {
+            bus.busRd(id, addr);
+            newline->setFlags(VALID);
+            invalidToShared++;
+        }
         if (op == 'w') {
             newline->setFlags(DIRTY);
             //send a busrdx
-            bus->busRdx(id, addr);
-	    invalidToModified++;
+            bus.busRdX(id, addr);
+            invalidToModified++;
         }
-    }  else {
+    } else {
         /**since it's a hit, update LRU and update dirty flag**/
-        if (line->isModified()) { //1.check if the cache is Modified, then do nothing
-            updateLRU(line);
-        } else if (line->isInvalid()) { //2. get from memory and change state
+        updateLRU(line);
+        //1.if modified do nothing
+        if (line->isModified()) {
+        } else if (line->isInvalid()) { //2. shared--get from memory and change state
             //line is present just update
-            updateLRU(line);
             if (op == 'r') {
-                bus->busRd(id, addr);
                 invalidToShared++;
+                bus.busRd(id, addr);
                 line->makeShared();
             } else {
                 invalidToModified++;
-                bus->busRdx(id, addr);
+                bus.busRdX(id, addr);
                 line->makeModified();
             }
         } else { //3. State is shared
-            updateLRU(line);
+            //updateLRU(line);
             if (op == 'w') {
                 sharedToModified++;
-                bus->busRdx(id, addr);
+                bus.busRdX(id, addr);
                 line->makeModified();
             }
+        }
+    }
+}
+
+void Cache::AccessMESI(ulong addr, uchar op, Bus bus) {
+    currentCycle++; /*per cache global counter to maintain LRU order 
+			among cache ways, updated on every cache access*/
+    if (op == 'w') writes++;
+    else reads++;
+
+    cacheLine * line = findLine(addr);
+    if (line == NULL)/*miss*/ {
+        if (op == 'w') writeMisses++;
+        else readMisses++;
+        cacheLine *newline = fillLine(addr);
+        if (bus.isCached(id, addr))
+            cacheToCache++; //SARKAR CHANGE
+        //reading send a busRd
+        if (op == 'r') {
+            //if no other cache has the line, then change to E
+            if (!bus.isCached(id, addr)) {
+                bus.busRd(id, addr);
+                newline->setFlags(EXCLUSIVE);
+                invalidToExclusive++;
+            } else {
+                bus.busRd(id, addr);
+                newline->setFlags(VALID);
+                invalidToShared++;
+                //cacheToCache++; //SARKAR CHANGE
+            }
+        }
+        if (op == 'w') {
+            newline->setFlags(DIRTY);
+            bus.busRdX(id, addr); //send a busrdx
+            invalidToModified++;
+        }
+    } else {
+        /**since it's a hit, update LRU and update dirty flag**/
+        updateLRU(line);
+        //1.if modified do nothing
+        if (line->isModified()) {
+        } else if (line->isInvalid()) { //2. invalid--get from memory and change state
+            if (bus.isCached(id, addr))
+                cacheToCache++; //SARKAR CHANGE
+
+            //line is present just update
+            if (op == 'r') {
+                //if line in no other cache has the line, then change to E
+                if (!bus.isCached(id, addr)) {
+                    bus.busRd(id, addr);
+                    line->setFlags(EXCLUSIVE);
+                    invalidToExclusive++;
+                } else {
+                    bus.busRd(id, addr);
+                    line->setFlags(VALID);
+                    invalidToShared++;
+                    //cacheToCache++; //SARKAR CHANGE
+                }
+            } else if (op == 'w') {
+                line->setFlags(DIRTY);
+                bus.busRdX(id, addr); //send a busrdx
+                invalidToModified++;
+                //if (bus.isCached(id, addr))
+                //cacheToCache++; //SARKAR CHANGE
+            }
+        } else if (line->isShared()) { //3. State is shared
+            if (op == 'w') {
+                sharedToModified++;
+                bus.busUpgr(id, addr);
+                line->makeModified();
+            }
+        } else if (line->isExclusive()) {
+            if (op == 'w') {
+                exclusiveToModified++;
+                line->makeModified();
+            }
+        }
+    }
+}
+
+void Cache::AccessMOESI(ulong addr, uchar op, Bus bus) {
+    currentCycle++; /*per cache global counter to maintain LRU order 
+			among cache ways, updated on every cache access*/
+    if (op == 'w') writes++;
+    else reads++;
+
+    cacheLine * line = findLine(addr);
+    if (line == NULL)/*miss*/ {
+        if (op == 'w') writeMisses++;
+        else readMisses++;
+        cacheLine *newline = fillLine(addr);
+        if (bus.isCachedOwner(id, addr))
+            cacheToCache++; //SARKAR CHANGE
+        //reading send a busRd
+        if (op == 'r') {
+            //if no other cache has the line, then change to E
+            if (!bus.isCachedOwner(id, addr)) {
+                bus.busRd(id, addr);
+                newline->setFlags(EXCLUSIVE);
+                invalidToExclusive++;
+            } else {
+                bus.busRd(id, addr);
+                newline->setFlags(VALID);
+                invalidToShared++;
+                //cacheToCache++; //SARKAR CHANGE
+            }
+        }
+        if (op == 'w') {
+            newline->setFlags(DIRTY);
+            bus.busRdX(id, addr); //send a busrdx
+            invalidToModified++;
+        }
+    } else {
+        /**since it's a hit, update LRU and update dirty flag**/
+        updateLRU(line);
+        //1.if modified do nothing
+        if (line->isModified()) {
+        } else if (line->isInvalid()) { //2. invalid--get from memory and change state
+            if (bus.isCachedOwner(id, addr))
+                cacheToCache++; //SARKAR CHANGE
+
+            //line is present just update
+            if (op == 'r') {
+                //if line in no other cache has the line, then change to E
+                if (!bus.isCachedOwner(id, addr)) {
+                    bus.busRd(id, addr);
+                    line->setFlags(EXCLUSIVE);
+                    invalidToExclusive++;
+                } else {
+                    bus.busRd(id, addr);
+                    line->setFlags(VALID);
+                    invalidToShared++;
+                    //cacheToCache++; //SARKAR CHANGE
+                }
+            } else if (op == 'w') {
+                line->setFlags(DIRTY);
+                bus.busRdX(id, addr); //send a busrdx
+                invalidToModified++;
+                //if (bus.isCached(id, addr))
+                //cacheToCache++; //SARKAR CHANGE
+            }
+        } else if (line->isShared()) { //3. State is shared
+            if (op == 'w') {
+                sharedToModified++;
+                bus.busUpgr(id, addr);
+                line->makeModified();
+            }
+        } else if (line->isExclusive()) {
+            if (op == 'w') {
+                exclusiveToModified++;
+                line->makeModified();
+            }
+        } else if (line->isOwner()) {
+            if (op == 'w') {
+                ownedToModified++;
+                bus.busUpgr(id, addr);
+                line->makeModified();
+            }
+        }
+    }
+}
+
+void Cache::processMOESIBusRd(ulong addr) {
+    cacheLine * line = findLine(addr);
+    if (line != NULL) {
+        if (line->isModified()) {
+            modifiedToOwned++;
+            line->makeOwner();
+            flushes++;
+        } else if (line->isExclusive()) {
+            exclusiveToShared++;
+            line->makeShared();
+            //cacheToCache++; SARKAR CHANGE
+        } else if (line->isShared()) {
+            //cacheToCache++;
+        } else if (line->isOwner()) {
+            //do Nothing
+        }
+    }
+}
+
+void Cache::processMOESIBusRdX(ulong addr) {
+    cacheLine * line = findLine(addr);
+    if (line != NULL) {
+        if (line->isShared()) {
+            line->makeInvalid();
+            sharedToInvalid++;
+            invalidations++;
+            //cacheToCache++;  SARKAR CHANGE
+        } else if (line->isModified()) {
+            modifiedToInvalid++;
+            invalidations++;
+            line->makeInvalid();
+            flushes++;
+        } else if (line->isExclusive()) {
+            //exclusiveToInvalid++;
+            invalidations++;
+            line->makeInvalid();
+            flushes++;
+        } else if (line->isOwner()) {
+            invalidations++;
+            line->makeInvalid();
+            flushes++;
+        }
+    }
+}
+
+void Cache::processMOESIBusUpgr(ulong addr) {
+    cacheLine * line = findLine(addr);
+    if (line != NULL) {
+        if (line->isShared()) {
+            line->makeInvalid();
+            invalidations++;
+        } else if(line->isOwner()){
+            line->makeInvalid();
+            invalidations++;
+        }
+    }
+}
+
+void Cache::processMESIBusRd(ulong addr) {
+    cacheLine * line = findLine(addr);
+    if (line != NULL) {
+        if (line->isModified()) {
+            modifiedToShared++;
+            line->makeShared();
+            flushes++;
+        } else if (line->isExclusive()) {
+            exclusiveToShared++;
+            line->makeShared();
+            //cacheToCache++; SARKAR CHANGE
+        } else if (line->isShared()) {
+            //cacheToCache++;
+        }
+    }
+}
+
+void Cache::processMESIBusRdX(ulong addr) {
+    cacheLine * line = findLine(addr);
+    if (line != NULL) {
+        if (line->isShared()) {
+            line->makeInvalid();
+            sharedToInvalid++;
+            invalidations++;
+            //cacheToCache++;  SARKAR CHANGE
+        } else if (line->isModified()) {
+            modifiedToInvalid++;
+            invalidations++;
+            line->makeInvalid();
+            flushes++;
+        } else if (line->isExclusive()) {
+            //exclusiveToInvalid++;
+            invalidations++;
+            line->makeInvalid();
+            flushes++;
+        }
+    }
+}
+
+void Cache::processMESIBusUpgr(ulong addr) {
+    cacheLine * line = findLine(addr);
+    if (line != NULL) {
+        if (line->isShared()) {
+            line->makeInvalid();
+            invalidations++;
         }
     }
 }
@@ -140,13 +399,13 @@ void Cache::processMSIBusRd(ulong addr) {
     }
 }
 
-void Cache::processMSIBusRdx(ulong addr) {
+void Cache::processMSIBusRdX(ulong addr) {
     cacheLine * line = findLine(addr);
     if (line != NULL) {
         if (line->isShared()) {
+            line->makeInvalid();
             sharedToInvalid++;
             invalidations++;
-            line->makeInvalid();
         } else if (line->isModified()) {
             modifiedToInvalid++;
             invalidations++;
@@ -229,24 +488,26 @@ cacheLine *Cache::fillLine(ulong addr) {
 }
 
 void Cache::printStats() {
-    int temp = 0;
-    cout << "===== Simulation results (Cache_" << id << ")      =====\n";
-    cout << "01. number of reads:\t\t\t\t" << reads << "\n";
-    cout << "02. number of read misses:\t\t\t" << readMisses << "\n";
-    cout << "03. number of writes:\t\t\t\t" << writes << "\n";
-    cout << "04. number of write misses:\t\t\t" << writeMisses << "\n";
-    cout << "05. number of write backs:\t\t\t" << writeBacks << "\n";
-    cout << "06. number of invalid to exclusive (INV->EXC):\t" << temp << "\n";
-    cout << "07. number of invalid to shared (INV->SHD):\t" << invalidToShared << "\n";
-    cout << "08. number of modified to shared (MOD->SHD):\t" << modifiedToShared << "\n";
-    cout << "09. number of exclusive to shared (EXC->SHD):\t" << temp << "\n";
-    cout << "10. number of shared to modified (SHD->MOD):\t" << sharedToModified << "\n";
-    cout << "11. number of invalid to modified (INV->MOD):\t" << invalidToModified << "\n";
-    cout << "12. number of exclusive to modified (EXC->MOD):\t" << temp << "\n";
-    cout << "13. number of owned to modified (OWN->MOD):\t" << temp << "\n";
-    cout << "14. number of modified to owned (MOD->OWN):\t" << temp << "\n";
-    cout << "15. number of cache to cache transfers:\t\t" << temp << "\n";
-    cout << "16. number of interventions:\t\t\t" << temp << "\n";
-    cout << "17. number of invalidations:\t\t\t" << invalidations << "\n";
-    cout << "18. number of flushes:\t\t\t\t" << flushes << "\n";
+
+    /****print out the rest of statistics here.****/
+    /****follow the ouput file format**************/
+    printf("===== Simulation results (Cache_%d)      =====\n", id);
+    printf("01. number of reads:				%ld\n", reads);
+    printf("02. number of read misses:			%ld\n", readMisses);
+    printf("03. number of writes:				%ld\n", writes);
+    printf("04. number of write misses:			%ld\n", writeMisses);
+    printf("05. number of write backs:			%ld\n", writeBacks);
+    printf("06. number of invalid to exclusive (INV->EXC):	%d\n", invalidToExclusive);
+    printf("07. number of invalid to shared (INV->SHD):	%d\n", invalidToShared);
+    printf("08. number of modified to shared (MOD->SHD):	%d\n", modifiedToShared);
+    printf("09. number of exclusive to shared (EXC->SHD):	%d\n", exclusiveToShared);
+    printf("10. number of shared to modified (SHD->MOD):	%d\n", sharedToModified);
+    printf("11. number of invalid to modified (INV->MOD):	%d\n", invalidToModified);
+    printf("12. number of exclusive to modified (EXC->MOD):	%d\n", exclusiveToModified);
+    printf("13. number of owned to modified (OWN->MOD):	%d\n", ownedToModified);
+    printf("14. number of modified to owned (MOD->OWN):	%d\n", modifiedToOwned);
+    printf("15. number of cache to cache transfers:		%d\n", cacheToCache);
+    printf("16. number of interventions:			%d\n", interventions);
+    printf("17. number of invalidations:			%d\n", invalidations);
+    printf("18. number of flushes:				%d\n", flushes);
 }

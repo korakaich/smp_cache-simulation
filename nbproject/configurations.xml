@@ -36,13 +36,10 @@
           <buildCommand>${MAKE} -f Makefile</buildCommand>
           <cleanCommand>${MAKE} -f Makefile clean</cleanCommand>
           <executablePath>smp_cache.exe</executablePath>
-          <ccTool>
-            <incDir>
-              <pElem></pElem>
-            </incDir>
-          </ccTool>
         </makeTool>
       </makefileType>
+      <item path="bus.h" ex="true" tool="3" flavor2="0">
+      </item>
     </conf>
   </confs>
 </configurationDescriptor>
