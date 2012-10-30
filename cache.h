@@ -84,6 +84,7 @@ public:
    
    cacheLine *findLineToReplace(ulong addr);
    cacheLine *fillLine(ulong addr);
+   cacheLine *fillLineMOESI(ulong addr);
    cacheLine * findLine(ulong addr);
    cacheLine * getLRU(ulong);
    
@@ -131,6 +132,8 @@ public:
     bool isCached(int, ulong);
 
     bool isCachedOwner(int, ulong);
+
+    bool isCachedDirty(int, ulong);
 
     void setCaches(Cache**, int num);
     

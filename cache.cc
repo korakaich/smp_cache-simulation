@@ -222,8 +222,8 @@ void Cache::AccessMOESI(ulong addr, uchar op, Bus bus) {
     if (line == NULL)/*miss*/ {
         if (op == 'w') writeMisses++;
         else readMisses++;
-        cacheLine *newline = fillLine(addr);
-        if (bus.isCachedOwner(id, addr))
+        cacheLine *newline = fillLineMOESI(addr);
+        if (bus.isCachedDirty(id, addr))
             cacheToCache++; //SARKAR CHANGE
         //reading send a busRd
         if (op == 'r') {
@@ -302,14 +302,14 @@ void Cache::processMESIBusRd(ulong addr){
             modifiedToShared++;
             line->makeShared();
             flushes++;
-	    interventions++;
+	    //interventions++;//Korak
         }
 	else if(line->isExclusive())
 	{
             exclusiveToShared++;
        	    line->makeShared();
        	    //cacheToCache++;	
-	    interventions++;		
+	    //interventions++;//Korak		
 	}
 	else if(line->isShared())
 	{
@@ -370,7 +370,7 @@ void Cache::processMSIBusRd(ulong addr)
             modifiedToShared++;
             line->makeShared();
             flushes++;
-	    interventions++;
+	    //interventions++;
         }
     }
 }
@@ -405,7 +405,7 @@ void Cache::processMOESIBusRd(ulong addr) {
         } else if (line->isExclusive()) {
             exclusiveToShared++;
             line->makeShared();
-	    interventions++;
+	    //interventions++;
             //cacheToCache++; 
         } else if (line->isShared()) {
             //cacheToCache++;
@@ -521,6 +521,24 @@ cacheLine *Cache::fillLine(ulong addr)
    cacheLine *victim = findLineToReplace(addr);
    assert(victim != 0);
    if(victim->getFlags() == DIRTY) writeBack(addr);
+    	
+   tag = calcTag(addr);   
+   victim->setTag(tag);
+   victim->setFlags(VALID);    
+   /**note that this cache line has been already 
+      upgraded to MRU in the previous function (findLineToReplace)**/
+
+   return victim;
+}
+
+/*allocate a new line only for MOESI*/
+cacheLine *Cache::fillLineMOESI(ulong addr)
+{ 
+   ulong tag;
+  
+   cacheLine *victim = findLineToReplace(addr);
+   assert(victim != 0);
+   if(victim->isModified()|| victim->isOwner() ) writeBack(addr);
     	
    tag = calcTag(addr);   
    victim->setTag(tag);

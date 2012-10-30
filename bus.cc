@@ -88,3 +88,14 @@ bool Bus::isCachedOwner(int id, ulong addr) {
     }
     return false;
 }
+
+bool Bus::isCachedDirty(int id, ulong addr) {
+    for (int i = 0; i < numOfCaches; i++) {
+        if (i != id) {
+            cacheLine *temp = caches[i]->findLine(addr);
+            if (temp != NULL && (temp->isOwner() || temp->isModified() || temp-> isExclusive()))
+                    return true;                          
+        }
+    }
+    return false;
+}
