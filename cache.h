@@ -21,7 +21,7 @@ enum{
 	VALID,
 	DIRTY,
 	EXCLUSIVE,
-        OWNER
+	OWNER
 };
 
 
@@ -49,7 +49,7 @@ public:
    void makeModified()   { Flags = DIRTY; }
    void makeShared() 	  { Flags = VALID; }
    void makeExclusive()   { Flags=EXCLUSIVE; }
-   void makeOwner()   { Flags=OWNER; }
+   void makeOwner()       { Flags= OWNER;}
    bool isModified() 	  { return ((Flags) == DIRTY); }
    bool isShared() 	  { return ((Flags) == VALID); }
    bool isInvalid()	  { return ((Flags) == INVALID); }
@@ -84,6 +84,7 @@ public:
    
    cacheLine *findLineToReplace(ulong addr);
    cacheLine *fillLine(ulong addr);
+   cacheLine *fillLineMOESI(ulong addr);
    cacheLine * findLine(ulong addr);
    cacheLine * getLRU(ulong);
    
@@ -108,12 +109,11 @@ public:
    void processMESIBusRd(ulong);
    void processMESIBusRdX(ulong);
    void processMESIBusUpgr(ulong);
-   
+
    void AccessMOESI(ulong, uchar, Bus);
    void processMOESIBusRd(ulong);
    void processMOESIBusRdX(ulong);
    void processMOESIBusUpgr(ulong);
-   
    //******///
    //add other functions to handle bus transactions///
    //******///
@@ -130,7 +130,10 @@ public:
     ~Bus();
     
     bool isCached(int, ulong);
+
     bool isCachedOwner(int, ulong);
+
+    bool isCachedDirty(int, ulong);
 
     void setCaches(Cache**, int num);
     
