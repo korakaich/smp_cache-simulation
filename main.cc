@@ -96,6 +96,9 @@ int main(int argc, char *argv[])
                 	cacheArray[procNum]->AccessMSI(addr, op, bus);
 		else if(protocol==1)
                 	cacheArray[procNum]->AccessMESI(addr, op, bus);		
+		else if(protocol==2)
+                	cacheArray[procNum]->AccessMOESI(addr, op, bus);		
+
 		if(op=='r')
 			total_reads++;
 		else

@@ -29,7 +29,7 @@ void Bus::busRd(int id, ulong address)
 			else if(protocol==1)
 				caches[i]->processMESIBusRd(address);
 			else
-				caches[i]->processMESIBusRd(address);//change to moesi
+				caches[i]->processMOESIBusRd(address);//change to moesi
 		}    
 	}
 }   
@@ -45,7 +45,7 @@ void Bus::busRdX(int id, ulong address)
 			else if(protocol==1)
 				caches[i]->processMESIBusRdX(address);
 			else
-				caches[i]->processMESIBusRdX(address);//change to moesi
+				caches[i]->processMOESIBusRdX(address);//change to moesi
 		}    
 	}
 }
@@ -59,6 +59,8 @@ void Bus::busUpgr(int id, ulong address)
 			//call cache function
 			if(protocol==1)
 				caches[i]->processMESIBusUpgr(address);
+			else
+				caches[i]->processMOESIBusUpgr(address);
 		}    
 	}
 }
@@ -74,4 +76,15 @@ bool Bus::isCached(int id, ulong addr)
 		}
 	}
 	return false;
+}
+
+bool Bus::isCachedOwner(int id, ulong addr) {
+    for (int i = 0; i < numOfCaches; i++) {
+        if (i != id) {
+            cacheLine *temp = caches[i]->findLine(addr);
+            if (temp != NULL && !temp->isInvalid())
+                    return true;                          
+        }
+    }
+    return false;
 }

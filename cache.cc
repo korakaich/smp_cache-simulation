@@ -133,97 +133,168 @@ void Cache::AccessMSI(ulong addr, uchar op, Bus bus) {
         }
     }
 }
-void Cache::AccessMESI(ulong addr, uchar op, Bus bus)
-{
-	currentCycle++; /*per cache global counter to maintain LRU order 
+
+void Cache::AccessMESI(ulong addr, uchar op, Bus bus) {
+    currentCycle++; /*per cache global counter to maintain LRU order 
 			among cache ways, updated on every cache access*/
     if (op == 'w') writes++;
     else reads++;
 
     cacheLine * line = findLine(addr);
-    if (line == NULL)/*miss*/ 
-	{
+    if (line == NULL)/*miss*/ {
         if (op == 'w') writeMisses++;
         else readMisses++;
         cacheLine *newline = fillLine(addr);
+        if (bus.isCached(id, addr))
+            cacheToCache++; //SARKAR CHANGE
         //reading send a busRd
-		if(op =='r')	
-		{
-			//if no other cache has the line, then change to E
-			if(!bus.isCached(id, addr))
-			{
-				bus.busRd(id,addr);
-				newline->setFlags(EXCLUSIVE);				
-				invalidToExclusive++;
-			}
-			else
-			{
-        		bus.busRd(id, addr);
-				newline->setFlags(VALID);
-				invalidToShared++;
-			}
-		}
-        if (op == 'w') 
-		{
-            newline->setFlags(DIRTY);            
-            bus.busRdX(id, addr);//send a busrdx
-	    	invalidToModified++;
+        if (op == 'r') {
+            //if no other cache has the line, then change to E
+            if (!bus.isCached(id, addr)) {
+                bus.busRd(id, addr);
+                newline->setFlags(EXCLUSIVE);
+                invalidToExclusive++;
+            } else {
+                bus.busRd(id, addr);
+                newline->setFlags(VALID);
+                invalidToShared++;
+                //cacheToCache++; //SARKAR CHANGE
+            }
         }
-    } 
-    else 
-    {
+        if (op == 'w') {
+            newline->setFlags(DIRTY);
+            bus.busRdX(id, addr); //send a busrdx
+            invalidToModified++;
+        }
+    } else {
         /**since it's a hit, update LRU and update dirty flag**/
-		updateLRU(line);                  
-		//1.if modified do nothing
-		if(line->isModified())
-		{
-		}
-        else if (line->isInvalid()) 
-		{ //2. invalid--get from memory and change state
+        updateLRU(line);
+        //1.if modified do nothing
+        if (line->isModified()) {
+        } else if (line->isInvalid()) { //2. invalid--get from memory and change state
+            if (bus.isCached(id, addr))
+                cacheToCache++; //SARKAR CHANGE
+
             //line is present just update
-            if(op =='r')	
-			{
-			//if line in no other cache has the line, then change to E
-				if(!bus.isCached(id, addr))
-				{
-					bus.busRd(id,addr);
-					line->setFlags(EXCLUSIVE);				
-					invalidToExclusive++;
-				}
-				else
-				{
-        			bus.busRd(id, addr);
-					line->setFlags(VALID);
-					invalidToShared++;
-				}
-			}
-			else if (op == 'w') 	
-			{
-           		 line->setFlags(DIRTY);            
-           		 bus.busRdX(id, addr);//send a busrdx
-	    		 invalidToModified++;
-        	}
-        } 
-		else if (line->isShared())
-		{ //3. State is shared
-            if (op == 'w') 
-			{
+            if (op == 'r') {
+                //if line in no other cache has the line, then change to E
+                if (!bus.isCached(id, addr)) {
+                    bus.busRd(id, addr);
+                    line->setFlags(EXCLUSIVE);
+                    invalidToExclusive++;
+                } else {
+                    bus.busRd(id, addr);
+                    line->setFlags(VALID);
+                    invalidToShared++;
+                    //cacheToCache++; //SARKAR CHANGE
+                }
+            } else if (op == 'w') {
+                line->setFlags(DIRTY);
+                bus.busRdX(id, addr); //send a busrdx
+                invalidToModified++;
+                //if (bus.isCached(id, addr))
+                //cacheToCache++; //SARKAR CHANGE
+            }
+        } else if (line->isShared()) { //3. State is shared
+            if (op == 'w') {
                 sharedToModified++;
                 bus.busUpgr(id, addr);
                 line->makeModified();
             }
-        }
-		else if (line->isExclusive())
-		{
+        } else if (line->isExclusive()) {
             if (op == 'w') {
                 exclusiveToModified++;
                 line->makeModified();
             }
-			
-		}
+        }
     }
 }
 
+
+
+void Cache::AccessMOESI(ulong addr, uchar op, Bus bus) {
+    currentCycle++; /*per cache global counter to maintain LRU order 
+			among cache ways, updated on every cache access*/
+    if (op == 'w') writes++;
+    else reads++;
+
+    cacheLine * line = findLine(addr);
+    if (line == NULL)/*miss*/ {
+        if (op == 'w') writeMisses++;
+        else readMisses++;
+        cacheLine *newline = fillLine(addr);
+        if (bus.isCachedOwner(id, addr))
+            cacheToCache++; //SARKAR CHANGE
+        //reading send a busRd
+        if (op == 'r') {
+            //if no other cache has the line, then change to E
+            if (!bus.isCachedOwner(id, addr)) {
+                bus.busRd(id, addr);
+                newline->setFlags(EXCLUSIVE);
+                invalidToExclusive++;
+            } else {
+                bus.busRd(id, addr);
+                newline->setFlags(VALID);
+                invalidToShared++;
+                //cacheToCache++; //SARKAR CHANGE
+            }
+        }
+        if (op == 'w') {
+            newline->setFlags(DIRTY);
+            bus.busRdX(id, addr); //send a busrdx
+            invalidToModified++;
+        }
+    } else {
+        /**since it's a hit, update LRU and update dirty flag**/
+        updateLRU(line);
+        //1.if modified do nothing
+        if (line->isModified()) {
+        } else if (line->isInvalid()) { //2. invalid--get from memory and change state
+            if (bus.isCachedOwner(id, addr))
+                cacheToCache++; //SARKAR CHANGE
+            //line is present just update
+            if (op == 'r') {
+                //if line in no other cache has the line, then change to E
+                if (!bus.isCachedOwner(id, addr)) {
+                    bus.busRd(id, addr);
+                    line->setFlags(EXCLUSIVE);
+                    invalidToExclusive++;
+                } else {
+                    bus.busRd(id, addr);
+                    line->setFlags(VALID);
+                    invalidToShared++;
+                    //cacheToCache++; //SARKAR CHANGE
+                }
+            } else if (op == 'w') {
+                line->setFlags(DIRTY);
+                bus.busRdX(id, addr); //send a busrdx
+                invalidToModified++;
+                //if (bus.isCached(id, addr))
+                //cacheToCache++; //SARKAR CHANGE
+            }
+        } else if (line->isShared()) { //3. State is shared
+            if (op == 'w') {
+                sharedToModified++;
+                bus.busUpgr(id, addr);
+                line->makeModified();
+            }
+        } else if (line->isExclusive()) {
+            if (op == 'w') {
+                exclusiveToModified++;
+                line->makeModified();
+            }
+        } else if (line->isOwner()) {
+            if (op == 'w') {
+                ownedToModified++;
+                bus.busUpgr(id, addr);
+                line->makeModified();
+            }
+        }
+    }
+}
+
+
+/****************************************** MESI **************************************/
 void Cache::processMESIBusRd(ulong addr){
     cacheLine * line = findLine(addr);
     if (line != NULL){		
@@ -231,18 +302,20 @@ void Cache::processMESIBusRd(ulong addr){
             modifiedToShared++;
             line->makeShared();
             flushes++;
+	    interventions++;
         }
-		else if(line->isExclusive())
-		{
+	else if(line->isExclusive())
+	{
             exclusiveToShared++;
-            line->makeShared();
-            cacheToCache++;			
-		}
-		else if(line->isShared())
-		{
-			//cacheToCache++;
-		}
-    }
+       	    line->makeShared();
+       	    //cacheToCache++;	
+	    interventions++;		
+	}
+	else if(line->isShared())
+	{
+		//cacheToCache++;
+	}
+   }
 }
 
 void Cache::processMESIBusRdX(ulong addr){
@@ -251,25 +324,27 @@ void Cache::processMESIBusRdX(ulong addr){
         if(line->isShared()){
             line->makeInvalid();
             sharedToInvalid++;	
-	    	invalidations++;
-			cacheToCache++;
+	    invalidations++;
+	    //cacheToCache++;
         } 
-		else if (line->isModified()) 
-		{
+	else if (line->isModified()) 
+	{
             modifiedToInvalid++;
-		    invalidations++;
+	    invalidations++;
             line->makeInvalid();
             flushes++;
         }
-		else if (line->isExclusive()) 
-		{
-            //exclusiveToInvalid++;
-		    invalidations++;
-            line->makeInvalid();
-            flushes++;
+	else if (line->isExclusive()) 
+	{
+           //exclusiveToInvalid++;
+	   invalidations++;
+           line->makeInvalid();
+           flushes++;
         }
     }
 }
+
+
 
 void Cache::processMESIBusUpgr(ulong addr)
 {
@@ -284,6 +359,8 @@ void Cache::processMESIBusUpgr(ulong addr)
 	}
 }
 
+/****************************************** MSI **************************************/
+
 
 void Cache::processMSIBusRd(ulong addr)
 {
@@ -293,6 +370,7 @@ void Cache::processMSIBusRd(ulong addr)
             modifiedToShared++;
             line->makeShared();
             flushes++;
+	    interventions++;
         }
     }
 }
@@ -308,6 +386,70 @@ void Cache::processMSIBusRdX(ulong addr){
 	    invalidations++;
             line->makeInvalid();
             flushes++;
+        }
+    }
+}
+
+
+
+/****************************************** MOESI **************************************/
+
+
+void Cache::processMOESIBusRd(ulong addr) {
+    cacheLine * line = findLine(addr);
+    if (line != NULL) {
+        if (line->isModified()) {
+            modifiedToOwned++;
+            line->makeOwner();
+            flushes++;
+        } else if (line->isExclusive()) {
+            exclusiveToShared++;
+            line->makeShared();
+	    interventions++;
+            //cacheToCache++; 
+        } else if (line->isShared()) {
+            //cacheToCache++;
+        } else if (line->isOwner()) {
+            //do Nothing
+	   flushes++;
+        }
+    }
+}
+
+void Cache::processMOESIBusRdX(ulong addr) {
+    cacheLine * line = findLine(addr);
+    if (line != NULL) {
+        if (line->isShared()) {
+            line->makeInvalid();
+            sharedToInvalid++;
+            invalidations++;
+            //cacheToCache++;  SARKAR CHANGE
+        } else if (line->isModified()) {
+            modifiedToInvalid++;
+            invalidations++;
+            line->makeInvalid();
+            flushes++;
+        } else if (line->isExclusive()) {
+            invalidations++;
+            line->makeInvalid();
+            flushes++;
+        } else if (line->isOwner()) {
+            invalidations++;
+            line->makeInvalid();
+            flushes++;
+        }
+    }
+}
+
+void Cache::processMOESIBusUpgr(ulong addr) {
+    cacheLine * line = findLine(addr);
+    if (line != NULL) {
+        if (line->isShared()) {
+            line->makeInvalid();
+            invalidations++;
+        } else if(line->isOwner()){
+            line->makeInvalid();
+            invalidations++;
         }
     }
 }

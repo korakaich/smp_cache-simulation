@@ -20,7 +20,8 @@ enum{
 	INVALID = 0,
 	VALID,
 	DIRTY,
-	EXCLUSIVE
+	EXCLUSIVE,
+	OWNER
 };
 
 
@@ -48,10 +49,12 @@ public:
    void makeModified()   { Flags = DIRTY; }
    void makeShared() 	  { Flags = VALID; }
    void makeExclusive()   { Flags=EXCLUSIVE; }
+   void makeOwner()       { Flags= OWNER;}
    bool isModified() 	  { return ((Flags) == DIRTY); }
    bool isShared() 	  { return ((Flags) == VALID); }
    bool isInvalid()	  { return ((Flags) == INVALID); }
    bool isExclusive()	  { return ((Flags) == EXCLUSIVE); }
+   bool isOwner()         { return ((Flags) == OWNER); }
 };
 
 class Cache
@@ -105,6 +108,11 @@ public:
    void processMESIBusRd(ulong);
    void processMESIBusRdX(ulong);
    void processMESIBusUpgr(ulong);
+
+   void AccessMOESI(ulong, uchar, Bus);
+   void processMOESIBusRd(ulong);
+   void processMOESIBusRdX(ulong);
+   void processMOESIBusUpgr(ulong);
    //******///
    //add other functions to handle bus transactions///
    //******///
@@ -121,6 +129,8 @@ public:
     ~Bus();
     
     bool isCached(int, ulong);
+
+    bool isCachedOwner(int, ulong);
 
     void setCaches(Cache**, int num);
     
