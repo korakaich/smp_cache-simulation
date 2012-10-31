@@ -434,7 +434,7 @@ void Cache::processMOESIBusRdX(ulong addr) {
         } else if (line->isExclusive()) {
             invalidations++;
             line->makeInvalid();
-            flushes++;
+            //flushes++;
         } else if (line->isOwner()) {
             invalidations++;
             line->makeInvalid();
