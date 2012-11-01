@@ -1,3 +1,4 @@
+
 /*******************************************************
                           cache.cc
                   Ahmad Samih & Yan Solihin
@@ -302,7 +303,7 @@ void Cache::processMESIBusRd(ulong addr){
             modifiedToShared++;
             line->makeShared();
             flushes++;
-	    //interventions++;//Korak
+	    interventions++;//Korak
         }
 	else if(line->isExclusive())
 	{
@@ -370,7 +371,7 @@ void Cache::processMSIBusRd(ulong addr)
             modifiedToShared++;
             line->makeShared();
             flushes++;
-	    //interventions++;
+	    interventions++;
         }
     }
 }
@@ -402,6 +403,7 @@ void Cache::processMOESIBusRd(ulong addr) {
             modifiedToOwned++;
             line->makeOwner();
             flushes++;
+            interventions++;
         } else if (line->isExclusive()) {
             exclusiveToShared++;
             line->makeShared();
@@ -432,7 +434,7 @@ void Cache::processMOESIBusRdX(ulong addr) {
         } else if (line->isExclusive()) {
             invalidations++;
             line->makeInvalid();
-            flushes++;
+            //flushes++;
         } else if (line->isOwner()) {
             invalidations++;
             line->makeInvalid();
