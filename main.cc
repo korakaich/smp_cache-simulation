@@ -1,4 +1,4 @@
-/*******************************************************
+ 	/*******************************************************
                           main.cc
                   Ahmad Samih & Yan Solihin
                            2009
@@ -34,8 +34,8 @@ int main(int argc, char *argv[])
 	char *fname =  (char *)malloc(20);
  	fname = argv[6];
 	Bus bus(protocol);	
-	Cache *cacheArray[4];
-	for(int i =0;i<4;i++)
+	Cache **cacheArray=new Cache *[num_processors];
+	for(int i =0;i<num_processors;i++)
 	{
 		cacheArray[i]=new Cache(cache_size, cache_assoc, blk_size);
 		cacheArray[i]->setId(i);
@@ -118,7 +118,7 @@ int main(int argc, char *argv[])
 		cout<<"COHERENCE PROTOCOL:		MOESI"<<endl;
 	cout<<"TRACE FILE:			"<<fname<<endl;
 
-	for(i=0;i<4;i++)
+	for(i=0;i<num_processors;i++)
 		cacheArray[i]->printStats();
 	///******************************************************************//
 	fclose(pFile);
